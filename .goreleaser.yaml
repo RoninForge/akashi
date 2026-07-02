@@ -1,0 +1,100 @@
+version: 2
+
+project_name: akashi
+
+before:
+  hooks:
+    - go mod tidy
+    - go mod verify
+
+builds:
+  - id: akashi
+    main: ./cmd/akashi
+    binary: akashi
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X github.com/RoninForge/akashi/internal/version.version={{.Version}}
+      - -X github.com/RoninForge/akashi/internal/version.commit={{.FullCommit}}
+      - -X github.com/RoninForge/akashi/internal/version.buildDate={{.Date}}
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+sboms:
+  - artifacts: archive
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: "^.*feat[(\\w)]*:+.*$"
+      order: 0
+    - title: Bug fixes
+      regexp: "^.*fix[(\\w)]*:+.*$"
+      order: 1
+    - title: Docs
+      regexp: "^.*docs[(\\w)]*:+.*$"
+      order: 2
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - "Merge pull request"
+      - "Merge branch"
+
+release:
+  github:
+    owner: RoninForge
+    name: akashi
+  draft: false
+  prerelease: auto
+  header: |
+    ## akashi {{ .Tag }}
+
+    Verify an MCP server is alive and conformant, with zero keys. Go binary,
+    probes only public endpoints, emits an embeddable "verified on DATE" badge.
+
+    **Install:**
+
+    ```sh
+    curl -fsSL https://roninforge.org/akashi/install.sh | sh
+    ```
+
+  footer: |
+    ---
+
+    **Full changelog**: https://github.com/RoninForge/akashi/compare/{{ .PreviousTag }}...{{ .Tag }}

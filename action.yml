@@ -1,0 +1,93 @@
+name: Akashi MCP Health Check
+description: Verify an MCP server is alive and conformant, keyless, in CI
+author: RoninForge
+branding:
+  icon: check-circle
+  color: orange
+
+inputs:
+  server:
+    description: The MCP server to check - a registry name, a GitHub repo URL, or a remote endpoint URL.
+    required: true
+  version:
+    description: Pin an akashi version (example v0.1.0). Defaults to the latest release.
+    required: false
+    default: ''
+  allow-degraded:
+    description: If true, a degraded (usable-but-broken) verdict still passes; only dead/unknown fail.
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Install akashi
+      shell: bash
+      env:
+        AKASHI_VERSION: ${{ inputs.version }}
+        # Pin the install.sh fetch to the same ref the caller used in
+        # `uses: RoninForge/akashi@vX` so the action and installer ship together.
+        AKASHI_ACTION_REF: ${{ github.action_ref }}
+      run: |
+        set -eu
+        ref="${AKASHI_ACTION_REF:-main}"
+        curl -fsSL "https://raw.githubusercontent.com/RoninForge/akashi/${ref}/scripts/install.sh" \
+          | BIN_DIR="$HOME/.local/bin" sh
+        echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+    - name: Run akashi
+      shell: bash
+      env:
+        AKASHI_SERVER: ${{ inputs.server }}
+        AKASHI_ALLOW_DEGRADED: ${{ inputs.allow-degraded }}
+      run: |
+        set -eu
+
+        json_out="$RUNNER_TEMP/akashi.json"
+        set +e
+        akashi check "$AKASHI_SERVER" --json > "$json_out"
+        exit_code=$?
+        set -e
+
+        # A usage/network error (exit 2) writes to stderr, leaving the JSON
+        # file empty. Bail early and propagate akashi's own exit code.
+        if [ ! -s "$json_out" ]; then
+          echo "akashi produced no JSON output (exit $exit_code). See the step log above." >&2
+          exit $exit_code
+        fi
+
+        # Summary table from the result row.
+        {
+          echo "## akashi"
+          echo
+          echo "\`$(akashi version | head -n1)\`"
+          echo
+          python3 - "$json_out" <<'PY'
+        import json, sys
+        with open(sys.argv[1]) as f:
+            r = json.load(f)
+        print(f'**{r.get("name","?")}** - verdict: `{r.get("verdict","?")}` (checked {r.get("checkedAt","?")} UTC)')
+        print()
+        print("| Status | Check | Detail |")
+        print("|---|---|---|")
+        for c in r.get("checks", []):
+            detail = str(c.get("detail","")).replace("|", "\\|")
+            print(f'| {c.get("status","")} | {c.get("name","")} | {detail} |')
+        reasons = r.get("reasons") or []
+        if reasons:
+            print()
+            print("Reasons: " + ", ".join(f'`{x}`' for x in reasons))
+        PY
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        # Decide pass/fail. akashi exit codes: 0 healthy, 1 degraded/dead/unknown, 2 error.
+        verdict=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("verdict",""))' "$json_out")
+        if [ "$verdict" = "healthy" ]; then
+          exit 0
+        fi
+        if [ "$verdict" = "degraded" ] && [ "$AKASHI_ALLOW_DEGRADED" = "true" ]; then
+          echo "akashi: verdict degraded, but allow-degraded=true - passing."
+          exit 0
+        fi
+        echo "akashi: verdict '$verdict' - failing the job."
+        exit 1

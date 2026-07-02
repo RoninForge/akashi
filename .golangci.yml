@@ -1,0 +1,60 @@
+# golangci-lint v2 config. Small, sharp linter set; enabling everything
+# generates noise that drowns real signal.
+
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+    - misspell
+    - gosec
+    - revive
+    - gocritic
+    - unconvert
+    - unparam
+
+  settings:
+    errcheck:
+      exclude-functions:
+        # CLI output to stdout/stderr. If the pipe is broken the program is
+        # already dying; checking every Fprintf adds noise without value.
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+    revive:
+      rules:
+        - name: exported
+          arguments:
+            - checkPrivateReceivers
+            - disableStutteringCheck
+    gosec:
+      excludes:
+        # G107: HTTP request with a variable URL. Probing arbitrary
+        # registry/repo/package/remote URLs is the entire purpose of akashi.
+        - G107
+        # G204: subprocess with a variable. We only exec the local `gh` CLI
+        # with constant arguments to read a token; the command is not
+        # user-controlled.
+        - G204
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gosec
+          - unparam
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
