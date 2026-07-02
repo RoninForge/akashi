@@ -45,19 +45,38 @@ akashi check <server>
 - a GitHub repository URL (`https://github.com/owner/repo`)
 - a remote endpoint URL (`https://mcp.example.com/sse`)
 
-A healthy server:
+A healthy server that ships an npm package:
 
 ```
 $ akashi check ai.adeu/adeu
 
-ai.adeu/adeu  checked 2026-07-01 UTC, keyless
+ai.adeu/adeu  checked 2026-07-02 UTC, keyless
 
   PASS  registry status                 active
+  PASS  server.json valid               validates against its declared JSON Schema
   PASS  repo reachable                  exists
   PASS  repo freshness                  pushed 0d ago
   PASS  package npm                     published (1.18.1)
   PASS  at least one live entrypoint    2 alive
   PASS  license present                 MIT
+
+  OK    healthy
+```
+
+A healthy hosted server, with its tools listed over a full MCP session:
+
+```
+$ akashi check ac.tandem/docs-mcp
+
+ac.tandem/docs-mcp  checked 2026-07-02 UTC, keyless
+
+  PASS  registry status                 active
+  PASS  server.json valid               validates against its declared JSON Schema
+  PASS  repo reachable                  exists
+  PASS  remote reachable                HTTP 200 via initialize
+  PASS  MCP conformance                 initialize handshake ok
+  PASS  tools/list                      13 tools: search_docs, get_doc, ...
+  PASS  at least one live entrypoint    2 alive
 
   OK    healthy
 ```
@@ -110,12 +129,22 @@ akashi check <server> --badge    # a shields.io endpoint badge JSON
 
 **Conformance** (is it a well-behaved MCP server):
 
+- `server.json` validates against the JSON Schema it declares. An invalid
+  manifest downgrades the verdict to degraded.
 - `initialize` handshake negotiates a protocol version.
-- The JSON-RPC response echoes the request id (not an HTML proxy returning 200).
+- The JSON-RPC response echoes the request id (not an HTML page impersonating a
+  server with a 200).
+- `tools/list` resolves over a full MCP session, using the official
+  [MCP go-sdk](https://github.com/modelcontextprotocol/go-sdk) client. This is
+  the strongest keyless proof that the endpoint is a real, working server (a raw
+  `initialize` 200 only shows it answered one request). It runs no tool: it
+  connects, reads the advertised tool list, and closes. It is informational and
+  never downgrades the verdict, since many valid servers advertise no tools.
 - A license is declared.
 
 An auth-gated remote (a 401/403 to `initialize`) is treated as alive, not
-broken. akashi never supplies credentials to reach past it.
+broken. akashi never supplies credentials to reach past it, and does not attempt
+`tools/list` against it.
 
 ## Verdicts
 

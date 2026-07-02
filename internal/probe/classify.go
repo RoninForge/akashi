@@ -2,6 +2,7 @@ package probe
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/RoninForge/akashi/internal/registry"
 )
@@ -71,6 +72,14 @@ func classify(s registry.Server, sig Signals) Result {
 		reasons = append(reasons, "registry_deprecated")
 	}
 
+	// A published server.json that does not validate against its own declared
+	// schema is an unambiguous conformance defect. (A tools/list failure is
+	// deliberately NOT a downgrade: many valid servers advertise no tools, and
+	// telling that apart from a real error keyless is unreliable.)
+	if sig.ServerJSON.Status == "invalid" {
+		reasons = append(reasons, "server_json_invalid")
+	}
+
 	// Entrypoints we could actually evaluate, and how many are alive.
 	probed := 0
 	if repo.Status == "alive" || repo.Status == "archived" || repo.Status == "missing" {
@@ -137,6 +146,11 @@ func buildChecks(s registry.Server, sig Signals, alive int) []Check {
 		checks = append(checks, Check{Name: "registry status", Status: Warn, Detail: s.RegistryStatus})
 	}
 
+	// server.json schema validity (only when resolved from the registry).
+	if c, ok := serverJSONCheck(sig.ServerJSON); ok {
+		checks = append(checks, c)
+	}
+
 	// Repository reachability + freshness.
 	repo := sig.Repo
 	switch repo.Status {
@@ -182,6 +196,9 @@ func buildChecks(s registry.Server, sig Signals, alive int) []Check {
 		case "reachable":
 			checks = append(checks, Check{Name: "remote reachable", Status: Pass, Detail: httpDetail(r)})
 			checks = append(checks, conformanceCheck(r))
+			if r.ToolsStatus != "" {
+				checks = append(checks, toolsCheck(r))
+			}
 		case "unreachable":
 			checks = append(checks, Check{Name: "remote reachable", Status: Fail, Detail: "unreachable"})
 		case "server_error":
@@ -250,6 +267,64 @@ func httpDetail(r RemoteSignal) string {
 		return fmt.Sprintf("HTTP %d via %s", r.HTTPStatus, r.Probe)
 	}
 	return "via " + r.Probe
+}
+
+// toolsCheck renders the go-sdk tools/list probe. It is informational and never
+// downgrades the verdict (see classify): a completed session is a positive
+// signal; a failure may just mean the server advertises no tools.
+func toolsCheck(r RemoteSignal) Check {
+	switch r.ToolsStatus {
+	case "ok":
+		d := fmt.Sprintf("%d tool%s", r.ToolCount, plural(r.ToolCount))
+		if len(r.ToolNames) > 0 {
+			names := strings.Join(r.ToolNames, ", ")
+			if r.ToolCount > len(r.ToolNames) {
+				names += ", ..."
+			}
+			d += ": " + names
+		}
+		return Check{Name: "tools/list", Status: Pass, Detail: d}
+	case "empty":
+		return Check{Name: "tools/list", Status: Warn, Detail: "session ok, but no tools advertised"}
+	case "error":
+		return Check{Name: "tools/list", Status: Warn, Detail: "server did not answer tools/list"}
+	case "connect_failed":
+		return Check{Name: "tools/list", Status: Warn, Detail: "could not complete a full MCP session"}
+	default:
+		return Check{Name: "tools/list", Status: Skip, Detail: "not evaluated"}
+	}
+}
+
+// serverJSONCheck renders the server.json validation. The bool is false when
+// there is nothing to show (the target was not a registry server).
+func serverJSONCheck(sj ServerJSONSignal) (Check, bool) {
+	switch sj.Status {
+	case "valid":
+		return Check{Name: "server.json valid", Status: Pass, Detail: "validates against its declared JSON Schema"}, true
+	case "invalid":
+		d := "does not validate against its schema"
+		if len(sj.Errors) > 0 {
+			d = sj.Errors[0]
+		}
+		return Check{Name: "server.json valid", Status: Fail, Detail: d}, true
+	case "error":
+		d := "could not validate"
+		if len(sj.Errors) > 0 {
+			d = sj.Errors[0]
+		}
+		return Check{Name: "server.json valid", Status: Warn, Detail: d}, true
+	case "no_schema":
+		return Check{Name: "server.json valid", Status: Skip, Detail: "no $schema declared"}, true
+	default: // "" (not a registry server) or "absent"
+		return Check{}, false
+	}
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 func boolToInt(b bool) int {

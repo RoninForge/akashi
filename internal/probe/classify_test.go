@@ -83,6 +83,19 @@ func TestClassifyVerdicts(t *testing.T) {
 			signals:     Signals{Repo: RepoSignal{Status: "none"}, Remotes: []RemoteSignal{{Status: "reachable", Conformance: "unverified"}}},
 			wantVerdict: Healthy,
 		},
+		{
+			name:        "invalid server.json is degraded",
+			server:      registry.Server{RegistryStatus: "active"},
+			signals:     Signals{Repo: RepoSignal{Status: "alive", AgeDays: &alivePush}, ServerJSON: ServerJSONSignal{Status: "invalid"}},
+			wantVerdict: Degraded,
+			wantReasons: []string{"server_json_invalid"},
+		},
+		{
+			name:        "tools/list failure does not downgrade a working server",
+			server:      registry.Server{RegistryStatus: "active"},
+			signals:     Signals{Repo: RepoSignal{Status: "none"}, Remotes: []RemoteSignal{{Status: "reachable", Conformance: "initialize_ok", ToolsStatus: "error"}}},
+			wantVerdict: Healthy,
+		},
 	}
 
 	for _, tt := range tests {

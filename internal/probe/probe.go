@@ -9,9 +9,11 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/RoninForge/akashi/internal/registry"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // DefaultUserAgent identifies akashi politely to every third party it probes.
@@ -40,16 +42,27 @@ type Engine struct {
 	RemoteTimeout time.Duration
 	// RequestTimeout bounds each registry/repo/package request.
 	RequestTimeout time.Duration
+	// ProbeTools runs the go-sdk tools/list conformance probe on reachable,
+	// conformant remotes. Default true; a bulk scan can disable it for speed.
+	ProbeTools bool
+	// ValidateServerJSON validates a registry server's server.json against its
+	// declared JSON Schema. Default true.
+	ValidateServerJSON bool
+
+	schemaMu    sync.Mutex
+	schemaCache map[string]*jsonschema.Schema
 }
 
 // NewEngine returns an Engine with sane defaults.
 func NewEngine() *Engine {
 	return &Engine{
-		HTTP:           &http.Client{},
-		UserAgent:      DefaultUserAgent,
-		Now:            time.Now,
-		RemoteTimeout:  12 * time.Second,
-		RequestTimeout: 15 * time.Second,
+		HTTP:               &http.Client{},
+		UserAgent:          DefaultUserAgent,
+		Now:                time.Now,
+		RemoteTimeout:      12 * time.Second,
+		RequestTimeout:     15 * time.Second,
+		ProbeTools:         true,
+		ValidateServerJSON: true,
 	}
 }
 
@@ -69,6 +82,9 @@ func (e *Engine) ProbeServer(ctx context.Context, s registry.Server) Result {
 	}
 	for _, rm := range s.Remotes {
 		sig.Remotes = append(sig.Remotes, e.checkRemote(ctx, rm))
+	}
+	if e.ValidateServerJSON && len(s.RawServer) > 0 {
+		sig.ServerJSON = e.validateServerJSON(ctx, s.RawServer)
 	}
 
 	res := classify(s, sig)
@@ -337,6 +353,14 @@ func (e *Engine) checkRemote(ctx context.Context, rm registry.Remote) RemoteSign
 	// including auth-gated), it is authoritative.
 	if init := e.mcpInitialize(ctx, rm.URL); init.err == nil && init.sig.Status == "reachable" {
 		init.sig.Type = rm.Type
+		// Upgrade the conformance evidence: if it answered a raw initialize,
+		// try a full MCP session and list its tools with the official client.
+		if e.ProbeTools && init.sig.Conformance == "initialize_ok" {
+			tl := e.mcpToolsList(ctx, rm.URL)
+			init.sig.ToolsStatus = tl.status
+			init.sig.ToolCount = tl.count
+			init.sig.ToolNames = tl.names
+		}
 		return init.sig
 	}
 

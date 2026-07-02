@@ -74,13 +74,28 @@ type RemoteSignal struct {
 	Probe       string `json:"probe,omitempty"`       // get|initialize
 	IDEchoed    *bool  `json:"idEchoed,omitempty"`    // did the initialize response echo the JSON-RPC id
 	Detail      string `json:"detail,omitempty"`
+	// tools/list probe, run with the official MCP client after a conformant
+	// initialize. A completed session that lists tools is the strongest keyless
+	// proof that this is a real, working MCP server.
+	ToolsStatus string   `json:"toolsStatus,omitempty"` // ok|empty|error|connect_failed
+	ToolCount   int      `json:"toolCount,omitempty"`
+	ToolNames   []string `json:"toolNames,omitempty"`
+}
+
+// ServerJSONSignal is the result of validating the server's published
+// server.json against its declared JSON Schema.
+type ServerJSONSignal struct {
+	Status string   `json:"status"` // valid|invalid|no_schema|absent|error
+	Schema string   `json:"schema,omitempty"`
+	Errors []string `json:"errors,omitempty"`
 }
 
 // Signals is the full raw evidence behind a verdict.
 type Signals struct {
-	Repo     RepoSignal      `json:"repo"`
-	Packages []PackageSignal `json:"packages"`
-	Remotes  []RemoteSignal  `json:"remotes"`
+	Repo       RepoSignal       `json:"repo"`
+	Packages   []PackageSignal  `json:"packages"`
+	Remotes    []RemoteSignal   `json:"remotes"`
+	ServerJSON ServerJSONSignal `json:"serverJson"`
 }
 
 // Result is the per-server probe outcome: a verdict, the reasons behind it,

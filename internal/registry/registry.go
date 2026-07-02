@@ -56,6 +56,10 @@ type Server struct {
 	Remotes        []Remote    `json:"remotes,omitempty"`
 	RegistryStatus string      `json:"registryStatus,omitempty"` // active|deprecated|deleted
 	Origin         string      `json:"origin"`                   // registry|repo|remote
+	// RawServer is the exact server.json object bytes as published, retained so
+	// the probe can validate it against its declared JSON Schema. Only set for
+	// registry-resolved servers.
+	RawServer json.RawMessage `json:"-"`
 }
 
 // Client talks to the MCP registry over plain keyless HTTP.
@@ -81,24 +85,29 @@ type rawOfficialMeta struct {
 	IsLatest bool   `json:"isLatest"`
 }
 
+// rawServerObj is the typed view of a server.json object.
+type rawServerObj struct {
+	Name        string      `json:"name"`
+	Title       string      `json:"title"`
+	Version     string      `json:"version"`
+	Description string      `json:"description"`
+	Repository  *Repository `json:"repository"`
+	Packages    []struct {
+		RegistryType string `json:"registryType"`
+		Identifier   string `json:"identifier"`
+		Version      string `json:"version"`
+		Transport    struct {
+			Type string `json:"type"`
+		} `json:"transport"`
+	} `json:"packages"`
+	Remotes []Remote `json:"remotes"`
+}
+
+// rawEntry keeps the server object as raw bytes (for schema validation) and
+// decodes it on demand.
 type rawEntry struct {
-	Server struct {
-		Name        string      `json:"name"`
-		Title       string      `json:"title"`
-		Version     string      `json:"version"`
-		Description string      `json:"description"`
-		Repository  *Repository `json:"repository"`
-		Packages    []struct {
-			RegistryType string `json:"registryType"`
-			Identifier   string `json:"identifier"`
-			Version      string `json:"version"`
-			Transport    struct {
-				Type string `json:"type"`
-			} `json:"transport"`
-		} `json:"packages"`
-		Remotes []Remote `json:"remotes"`
-	} `json:"server"`
-	Meta struct {
+	Server json.RawMessage `json:"server"`
+	Meta   struct {
 		Official rawOfficialMeta `json:"io.modelcontextprotocol.registry/official"`
 	} `json:"_meta"`
 }
@@ -111,17 +120,20 @@ type rawList struct {
 }
 
 func (e rawEntry) normalize() Server {
+	var obj rawServerObj
+	_ = json.Unmarshal(e.Server, &obj) // best-effort; a malformed record yields a mostly-empty Server
 	s := Server{
-		Name:           e.Server.Name,
-		Title:          e.Server.Title,
-		Version:        e.Server.Version,
-		Description:    e.Server.Description,
-		Repository:     e.Server.Repository,
-		Remotes:        e.Server.Remotes,
+		Name:           obj.Name,
+		Title:          obj.Title,
+		Version:        obj.Version,
+		Description:    obj.Description,
+		Repository:     obj.Repository,
+		Remotes:        obj.Remotes,
 		RegistryStatus: e.Meta.Official.Status,
 		Origin:         "registry",
+		RawServer:      e.Server,
 	}
-	for _, p := range e.Server.Packages {
+	for _, p := range obj.Packages {
 		s.Packages = append(s.Packages, Package{
 			RegistryType: p.RegistryType,
 			Identifier:   p.Identifier,
@@ -196,15 +208,15 @@ func (c *Client) ByName(ctx context.Context, name string) (*Server, error) {
 		}
 
 		for _, e := range list.Servers {
-			if e.Server.Name == name && e.Meta.Official.IsLatest {
-				s := e.normalize()
+			s := e.normalize()
+			switch {
+			case s.Name == name && e.Meta.Official.IsLatest:
 				return &s, nil
+			case s.Name == name && firstSameName == nil:
+				saved := s
+				firstSameName = &saved
 			}
-			if e.Server.Name == name && firstSameName == nil {
-				s := e.normalize()
-				firstSameName = &s
-			}
-			nearby = append(nearby, e.Server.Name)
+			nearby = append(nearby, s.Name)
 		}
 
 		cursor = list.Metadata.NextCursor
@@ -250,7 +262,8 @@ func (c *Client) Drain(ctx context.Context, max int) ([]Server, error) {
 			if !e.Meta.Official.IsLatest {
 				continue
 			}
-			seen[e.Server.Name] = e.normalize()
+			s := e.normalize()
+			seen[s.Name] = s
 		}
 		if max > 0 && len(seen) >= max {
 			break
