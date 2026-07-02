@@ -14,6 +14,7 @@ package probe
 // Verdict is the overall health classification of a server.
 type Verdict string
 
+// Verdict values, from best to worst health.
 const (
 	Healthy  Verdict = "healthy"  // at least one live entrypoint and nothing broken
 	Degraded Verdict = "degraded" // usable, but something is broken
@@ -24,6 +25,7 @@ const (
 // Status is a single check outcome for display.
 type Status string
 
+// Status values for a single check line.
 const (
 	Pass Status = "pass"
 	Warn Status = "warn"

@@ -472,7 +472,7 @@ func (e *Engine) fetch(ctx context.Context, method, url string, headers map[stri
 	if err != nil {
 		return httpResult{err: err}
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	out := httpResult{status: res.StatusCode}
 	switch {
 	case maxBody > 0:

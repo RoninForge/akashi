@@ -300,7 +300,7 @@ func (c *Client) getList(ctx context.Context, u string) (*rawList, error) {
 	if err != nil {
 		return nil, fmt.Errorf("registry request: %w", err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("registry returned HTTP %d", res.StatusCode)
 	}

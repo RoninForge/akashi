@@ -22,7 +22,7 @@ type checkFlags struct {
 	timeout time.Duration
 }
 
-func newCheckCmd(stdout, stderr io.Writer) *cobra.Command {
+func newCheckCmd(stdout, _ io.Writer) *cobra.Command {
 	var flags checkFlags
 	cmd := &cobra.Command{
 		Use:   "check <server>",
