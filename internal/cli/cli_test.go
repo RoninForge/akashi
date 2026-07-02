@@ -54,3 +54,27 @@ func TestUnknownCommand(t *testing.T) {
 		t.Errorf("unknown command exit = %d, want 2", code)
 	}
 }
+
+func TestScanRequiresOut(t *testing.T) {
+	// This error is returned before any network call: cobra's required-flag
+	// check runs before RunE.
+	_, stderr, code := run("scan")
+	if code != 2 {
+		t.Errorf("scan with no --out exit = %d, want 2", code)
+	}
+	if !strings.Contains(stderr, "out") {
+		t.Errorf("stderr = %q, want a message about the required --out flag", stderr)
+	}
+}
+
+func TestScanHelp(t *testing.T) {
+	out, _, code := run("scan", "--help")
+	if code != 0 {
+		t.Errorf("scan --help exit = %d, want 0", code)
+	}
+	for _, want := range []string{"records.jsonl", "summary.json", "--out", "--concurrency"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("scan --help output missing %q", want)
+		}
+	}
+}

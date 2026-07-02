@@ -88,6 +88,8 @@ func (e *Engine) ProbeServer(ctx context.Context, s registry.Server) Result {
 	}
 
 	res := classify(s, sig)
+	res.Title = s.Title
+	res.Description = s.Description
 	res.CheckedAt = e.now().UTC().Format("2006-01-02")
 	return res
 }

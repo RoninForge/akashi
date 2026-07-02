@@ -1,5 +1,6 @@
-// Package report renders a probe.Result as a human-readable summary, as JSON,
-// or as a shields.io endpoint badge.
+// Package report renders a probe.Result as a human-readable summary, as JSON
+// (pretty-printed or one compact line for a JSONL dataset), or as a
+// shields.io endpoint badge.
 package report
 
 import (
@@ -48,6 +49,18 @@ func WritePretty(w io.Writer, r probe.Result, color bool) {
 func WriteJSON(w io.Writer, r probe.Result) error {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+	return enc.Encode(r)
+}
+
+// WriteJSONLine writes the full Result as compact, single-line JSON with a
+// trailing newline: one row of a JSONL dataset. It uses the same encoder
+// settings as WriteJSON (no HTML escaping), so a census record carries
+// exactly the same fields and values `check <server> --json` prints, just
+// without the pretty indentation a multi-line report needs and a JSONL
+// record cannot have.
+func WriteJSONLine(w io.Writer, r probe.Result) error {
+	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
 	return enc.Encode(r)
 }

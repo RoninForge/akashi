@@ -100,8 +100,15 @@ type Signals struct {
 
 // Result is the per-server probe outcome: a verdict, the reasons behind it,
 // a display-ready check list, and the raw signals for machine consumers.
+// Title and Description are carried through unchanged from the registry (see
+// registry.Server) so a downstream index page has a human title and a meta
+// description without a second registry lookup; both are empty when the
+// target was not resolved from the registry (a bare repo or remote URL) or
+// when the registry itself has no title for that server.
 type Result struct {
 	Name              string   `json:"name"`
+	Title             string   `json:"title,omitempty"`
+	Description       string   `json:"description,omitempty"`
 	RegistryStatus    string   `json:"registryStatus,omitempty"`
 	Version           string   `json:"version,omitempty"`
 	Verdict           Verdict  `json:"verdict"`

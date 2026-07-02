@@ -44,6 +44,8 @@ func TestProbeServerHealthy(t *testing.T) {
 
 	s := registry.Server{
 		Name:           "io.github.acme/thing",
+		Title:          "Thing",
+		Description:    "Does the thing.",
 		RegistryStatus: "active",
 		Repository:     &registry.Repository{URL: "https://github.com/acme/thing"},
 		Packages:       []registry.Package{{RegistryType: "npm", Identifier: "thing"}},
@@ -55,6 +57,9 @@ func TestProbeServerHealthy(t *testing.T) {
 	}
 	if got.CheckedAt != "2026-07-01" {
 		t.Errorf("CheckedAt = %q, want 2026-07-01", got.CheckedAt)
+	}
+	if got.Title != "Thing" || got.Description != "Does the thing." {
+		t.Errorf("title/description = %q/%q, want carried through from the registry.Server", got.Title, got.Description)
 	}
 	if got.Signals.Repo.License != "MIT" {
 		t.Errorf("license = %q, want MIT", got.Signals.Repo.License)

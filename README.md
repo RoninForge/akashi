@@ -112,6 +112,28 @@ akashi check <server> --badge    # a shields.io endpoint badge JSON
 | 1 | degraded, dead, or unknown (a real health finding) |
 | 2 | invocation or network error |
 
+## Census: scan the whole registry
+
+`akashi scan` runs the same keyless check set as `akashi check` against every
+server in the official MCP registry and writes a dated dataset.
+
+```
+akashi scan --out ./census              # the whole registry
+akashi scan --out ./census --limit 500  # a sample
+```
+
+It writes two files into `--out`:
+
+- `records.jsonl` - one probe result per server, one JSON line each. Each line
+  is byte-identical to `akashi check <server> --json`, so any row is
+  independently reproducible with a single-server check.
+- `summary.json` - verdict counts and rates, a remote-bearing segment, name
+  validation findings, and the run's reproducibility parameters.
+
+A scan resumes automatically: rerun with the same `--out` and servers already
+recorded are not re-probed. Concurrency, the per-server timeout, and the server
+count are tunable with `--concurrency`, `--timeout`, and `--limit`.
+
 ## What it checks
 
 **Health** (can I get and run this at all):

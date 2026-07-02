@@ -82,3 +82,50 @@ func TestWriteJSONRoundTrips(t *testing.T) {
 		t.Errorf("round-trip mismatch: %+v", out)
 	}
 }
+
+func TestWriteJSONLineIsOneCompactLine(t *testing.T) {
+	var buf bytes.Buffer
+	in := probe.Result{Name: "n", Verdict: probe.Degraded, CheckedAt: "2026-07-01", Reasons: []string{"repo_404"}}
+	if err := WriteJSONLine(&buf, in); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if strings.Count(out, "\n") != 1 || !strings.HasSuffix(out, "\n") {
+		t.Fatalf("expected exactly one trailing newline, got %q", out)
+	}
+	var got probe.Result
+	if err := json.Unmarshal([]byte(strings.TrimSuffix(out, "\n")), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != in.Name || got.Verdict != in.Verdict {
+		t.Errorf("round-trip mismatch: %+v", got)
+	}
+}
+
+func TestWriteJSONLineFieldsMatchWriteJSON(t *testing.T) {
+	// A census record must carry the exact same fields "check --json" prints,
+	// just compacted onto one line rather than pretty-printed.
+	in := probe.Result{Name: "n", Verdict: probe.Healthy, CheckedAt: "2026-07-01"}
+
+	var pretty bytes.Buffer
+	if err := WriteJSON(&pretty, in); err != nil {
+		t.Fatal(err)
+	}
+	var line bytes.Buffer
+	if err := WriteJSONLine(&line, in); err != nil {
+		t.Fatal(err)
+	}
+
+	var wantMap, gotMap map[string]any
+	if err := json.Unmarshal(pretty.Bytes(), &wantMap); err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(line.Bytes(), &gotMap); err != nil {
+		t.Fatal(err)
+	}
+	wantJSON, _ := json.Marshal(wantMap)
+	gotJSON, _ := json.Marshal(gotMap)
+	if string(wantJSON) != string(gotJSON) {
+		t.Errorf("field mismatch:\nwant %s\ngot  %s", wantJSON, gotJSON)
+	}
+}

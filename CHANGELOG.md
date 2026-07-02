@@ -4,6 +4,29 @@ All notable changes to akashi are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-07-02
+
+### Added
+
+- `akashi scan` - a bulk census command. It drains the whole official MCP
+  registry and runs the exact same keyless check set as `akashi check` against
+  every server, writing a dated dataset: `records.jsonl` (one probe result per
+  server, byte-identical to `akashi check <server> --json`) and `summary.json`
+  (verdict counts and rates, a remote-bearing segment, name-validation findings,
+  and the reproducibility parameters for the run). Bounded concurrency, a
+  resumable checkpoint (rerun with the same `--out` to continue an interrupted
+  run), and GitHub rate-limit backoff scoped to `api.github.com`. Flags:
+  `--out` (required), `--limit`, `--concurrency`, `--timeout`.
+- Each probe result now carries the registry `title` and `description`, so a
+  census can build per-server pages and a search index without a second lookup.
+  `akashi check --json` carries them too.
+
+### Notes
+
+- `akashi scan` is keyless like `check`: it authenticates to no probed server
+  and runs no tool. A GitHub token, if present, is used only against the public
+  GitHub API to raise the rate limit.
+
 ## [0.2.0] - 2026-07-02
 
 ### Added

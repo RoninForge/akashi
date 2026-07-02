@@ -63,6 +63,7 @@ The name means "proof" or "certificate" (証) in Japanese.`,
 	cmd.SetErr(stderr)
 
 	cmd.AddCommand(newCheckCmd(stdout, stderr))
+	cmd.AddCommand(newScanCmd(stdout, stderr))
 	cmd.AddCommand(newVersionCmd(stdout))
 
 	return cmd
