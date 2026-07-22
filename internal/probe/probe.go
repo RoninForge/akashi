@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -434,6 +435,13 @@ func (e *Engine) mcpInitialize(ctx context.Context, u string) initResult {
 			sig.Conformance = "initialize_ok"
 			echoed := jsonRPCIDEchoed(r.body)
 			sig.IDEchoed = &echoed
+			// Record the raw spec-readiness observables: what version the
+			// server negotiated, which capabilities it advertises, and whether
+			// it issued a session id (stateful-session usage). Classification
+			// happens downstream; the probe only preserves the evidence.
+			sig.ProtocolVersion, sig.Capabilities = parseInitializeResult(r.body)
+			issued := r.header.Get("Mcp-Session-Id") != ""
+			sig.SessionIssued = &issued
 		} else {
 			// A 200 that is not a JSON-RPC MCP response: an HTML page or proxy
 			// masquerading as a server. This is a real conformance failure.
@@ -458,11 +466,49 @@ func jsonRPCIDEchoed(body []byte) bool {
 	return idEchoRe.Match(body)
 }
 
+// parseInitializeResult extracts the negotiated protocol version and the
+// sorted top-level server capability keys from an initialize response. The
+// body is either plain JSON or an SSE stream whose data: lines carry the
+// JSON, so plain decoding is tried first and each data: line after. A body
+// that decodes but carries no result yields zero values: absence of evidence
+// is recorded as absence, never guessed.
+func parseInitializeResult(body []byte) (protocolVersion string, capabilities []string) {
+	var envelope struct {
+		Result struct {
+			ProtocolVersion string                     `json:"protocolVersion"`
+			Capabilities    map[string]json.RawMessage `json:"capabilities"`
+		} `json:"result"`
+	}
+	try := func(b []byte) bool {
+		if err := json.Unmarshal(b, &envelope); err != nil {
+			return false
+		}
+		return envelope.Result.ProtocolVersion != "" || len(envelope.Result.Capabilities) > 0
+	}
+	if !try(bytes.TrimSpace(body)) {
+		for _, line := range strings.Split(string(body), "\n") {
+			line = strings.TrimSpace(line)
+			if data, ok := strings.CutPrefix(line, "data:"); ok && try([]byte(strings.TrimSpace(data))) {
+				break
+			}
+		}
+	}
+	if len(envelope.Result.Capabilities) > 0 {
+		capabilities = make([]string, 0, len(envelope.Result.Capabilities))
+		for k := range envelope.Result.Capabilities {
+			capabilities = append(capabilities, k)
+		}
+		sort.Strings(capabilities)
+	}
+	return envelope.Result.ProtocolVersion, capabilities
+}
+
 // --- shared HTTP ---
 
 type httpResult struct {
 	status int
 	body   []byte
+	header http.Header
 	err    error
 }
 
@@ -499,7 +545,7 @@ func (e *Engine) fetch(ctx context.Context, method, url string, headers map[stri
 		return httpResult{err: err}
 	}
 	defer func() { _ = res.Body.Close() }()
-	out := httpResult{status: res.StatusCode}
+	out := httpResult{status: res.StatusCode, header: res.Header}
 	switch {
 	case maxBody > 0:
 		out.body, err = io.ReadAll(io.LimitReader(res.Body, maxBody))

@@ -4,6 +4,19 @@ All notable changes to akashi are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims
 to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- The remote `initialize` probe now records its raw evidence when the
+  handshake is conformant: the protocol version the server answered with, the
+  sorted top-level server capability keys, and whether an `Mcp-Session-Id`
+  header was issued (stateful-session usage). The fields appear in
+  `akashi check --json` and in `akashi scan` records as `protocolVersion`,
+  `capabilities`, and `sessionIssued`; they are the observables a
+  2026-07-28 spec-readiness classification is computed from. The probe
+  records evidence, it does not judge readiness, and verdicts are unchanged.
+
 ## [0.3.0] - 2026-07-02
 
 ### Added

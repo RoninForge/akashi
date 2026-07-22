@@ -112,6 +112,46 @@ func TestCheckRemoteInitializeOK(t *testing.T) {
 	}
 }
 
+func TestCheckRemoteInitializeEvidence(t *testing.T) {
+	// A conformant initialize also records the readiness observables: the
+	// negotiated protocol version, the sorted capability keys, and whether an
+	// Mcp-Session-Id header was issued.
+	e := testEngine(func(_ *http.Request) (*http.Response, error) {
+		r := resp(200, `{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2025-06-18","capabilities":{"tools":{"listChanged":true},"logging":{}},"serverInfo":{"name":"x"}}}`)
+		r.Header.Set("Mcp-Session-Id", "abc123")
+		return r, nil
+	})
+	got := e.checkRemote(context.Background(), registry.Remote{URL: "https://mcp.example.com/mcp"})
+	if got.ProtocolVersion != "2025-06-18" {
+		t.Errorf("ProtocolVersion = %q, want 2025-06-18", got.ProtocolVersion)
+	}
+	if len(got.Capabilities) != 2 || got.Capabilities[0] != "logging" || got.Capabilities[1] != "tools" {
+		t.Errorf("Capabilities = %v, want [logging tools]", got.Capabilities)
+	}
+	if got.SessionIssued == nil || !*got.SessionIssued {
+		t.Errorf("SessionIssued = %v, want true", got.SessionIssued)
+	}
+}
+
+func TestCheckRemoteInitializeEvidenceSSE(t *testing.T) {
+	// The same evidence must survive SSE framing, and a server that issues no
+	// session id records SessionIssued=false (stateless), not nil.
+	e := testEngine(func(_ *http.Request) (*http.Response, error) {
+		body := "event: message\ndata: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocolVersion\":\"2026-07-28\",\"capabilities\":{\"tools\":{}},\"serverInfo\":{\"name\":\"x\"}}}\n\n"
+		return resp(200, body), nil
+	})
+	got := e.checkRemote(context.Background(), registry.Remote{URL: "https://mcp.example.com/mcp"})
+	if got.ProtocolVersion != "2026-07-28" {
+		t.Errorf("ProtocolVersion = %q, want 2026-07-28", got.ProtocolVersion)
+	}
+	if len(got.Capabilities) != 1 || got.Capabilities[0] != "tools" {
+		t.Errorf("Capabilities = %v, want [tools]", got.Capabilities)
+	}
+	if got.SessionIssued == nil || *got.SessionIssued {
+		t.Errorf("SessionIssued = %v, want false", got.SessionIssued)
+	}
+}
+
 func TestCheckRemoteAuthGated(t *testing.T) {
 	// A 401 to initialize means alive but auth-gated: reachable, not broken.
 	e := testEngine(func(_ *http.Request) (*http.Response, error) {

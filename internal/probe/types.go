@@ -80,6 +80,13 @@ type RemoteSignal struct {
 	ToolsStatus string   `json:"toolsStatus,omitempty"` // ok|empty|error|connect_failed
 	ToolCount   int      `json:"toolCount,omitempty"`
 	ToolNames   []string `json:"toolNames,omitempty"`
+	// initialize-response evidence, persisted only on a conformant handshake
+	// (Conformance == initialize_ok). These are the raw observables a spec-
+	// readiness classification is computed from downstream; the probe records,
+	// it does not judge.
+	ProtocolVersion string   `json:"protocolVersion,omitempty"` // version the server answered with
+	Capabilities    []string `json:"capabilities,omitempty"`    // sorted top-level server capability keys
+	SessionIssued   *bool    `json:"sessionIssued,omitempty"`   // response carried an Mcp-Session-Id header
 }
 
 // ServerJSONSignal is the result of validating the server's published
