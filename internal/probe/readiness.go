@@ -147,7 +147,7 @@ func (e *Engine) checkReadiness(ctx context.Context, rm string, declaredTranspor
 
 	// B3: server/discover, the RPC 2026-07-28 makes mandatory.
 	disc := e.readinessCall(ctx, rm, `{"jsonrpc":"2.0","id":3,"method":"server/discover","params":{}}`,
-		merge(callHeaders, "Mcp-Method", "server/discover"))
+		withMethod(callHeaders, "server/discover"))
 	if disc.ok {
 		sig.DiscoverSupported = true
 		sig.DiscoverVersions = disc.versions
@@ -156,7 +156,7 @@ func (e *Engine) checkReadiness(ctx context.Context, rm string, declaredTranspor
 	// B10/B13: a tools/list POST whose Mcp-Method header deliberately names a
 	// different method. A conformant server rejects the mismatch; the numeric
 	// code tells RC builds (-32001) from final builds (-32020).
-	hdr := e.readinessCall(ctx, rm, toolsBody, merge(callHeaders, "Mcp-Method", "resources/list"))
+	hdr := e.readinessCall(ctx, rm, toolsBody, withMethod(callHeaders, "resources/list"))
 	switch {
 	case hdr.errCode == -32020:
 		sig.HeaderEnforcement = "enforced-32020"
@@ -174,7 +174,7 @@ func (e *Engine) checkReadiness(ctx context.Context, rm string, declaredTranspor
 	// verdict-bearing, so precision beats recall. The body cap keeps a real
 	// stream from hanging the pass.
 	sub := e.readinessCall(ctx, rm, `{"jsonrpc":"2.0","id":5,"method":"subscriptions/listen","params":{}}`,
-		merge(callHeaders, "Mcp-Method", "subscriptions/listen"))
+		withMethod(callHeaders, "subscriptions/listen"))
 	sig.SubscriptionsListen = sub.ok
 
 	// D2/B4: what a plain GET on the endpoint does. The legacy HTTP+SSE
@@ -188,7 +188,7 @@ func (e *Engine) checkReadiness(ctx context.Context, rm string, declaredTranspor
 		if c == "resources" {
 			nf := e.readinessCall(ctx, rm,
 				`{"jsonrpc":"2.0","id":6,"method":"resources/read","params":{"uri":"akashi://readiness-sentinel/does-not-exist"}}`,
-				merge(callHeaders, "Mcp-Method", "resources/read"))
+				withMethod(callHeaders, "resources/read"))
 			if nf.errCode == -32002 || nf.errCode == -32602 {
 				sig.ResourceNotFoundCode = nf.errCode
 			}
@@ -382,13 +382,13 @@ func jsonRPCPayload(body []byte) []byte {
 	return nil
 }
 
-// merge returns a copy of h with one extra header set, leaving h untouched
-// so shared base headers are never mutated between calls.
-func merge(h map[string]string, k, v string) map[string]string {
+// withMethod returns a copy of h with the Mcp-Method routing header set,
+// leaving h untouched so shared base headers are never mutated between calls.
+func withMethod(h map[string]string, method string) map[string]string {
 	out := make(map[string]string, len(h)+1)
 	for key, val := range h {
 		out[key] = val
 	}
-	out[k] = v
+	out["Mcp-Method"] = method
 	return out
 }
