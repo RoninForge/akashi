@@ -87,6 +87,10 @@ type RemoteSignal struct {
 	ProtocolVersion string   `json:"protocolVersion,omitempty"` // version the server answered with
 	Capabilities    []string `json:"capabilities,omitempty"`    // sorted top-level server capability keys
 	SessionIssued   *bool    `json:"sessionIssued,omitempty"`   // response carried an Mcp-Session-Id header
+
+	// sessionID carries the minted session value to the readiness pass within
+	// this process only; it is deliberately unexported so it never persists.
+	sessionID string
 }
 
 // ServerJSONSignal is the result of validating the server's published
@@ -125,6 +129,11 @@ type Result struct {
 	AliveEntrypoints  int      `json:"aliveEntrypoints"`
 	ProbedEntrypoints int      `json:"probedEntrypoints"`
 	CheckedAt         string   `json:"checkedAt"` // YYYY-MM-DD, UTC
+	// Readiness is the 2026-07-28 spec-readiness pass, run against the first
+	// conformant remote. Nil when the server has no keylessly reachable MCP
+	// endpoint: that is the "unknown" bucket, absence of evidence recorded as
+	// absence. Orthogonal to Verdict, which stays a pure health measure.
+	Readiness *ReadinessSignal `json:"readiness,omitempty"`
 }
 
 // OK reports whether the verdict is one a badge should render green.

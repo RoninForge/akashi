@@ -8,14 +8,28 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A 2026-07-28 spec-readiness pass. Against a server's first conformant
+  remote, akashi now runs a handful of extra read-only, keyless calls (a
+  handshake-free `tools/list`, `server/discover`, a routing-header mismatch
+  check, a `subscriptions/listen` existence check, one GET, a sentinel
+  `resources/read` when the server declares resources, and a fetch of the
+  public RFC 9728 metadata) and derives a readiness verdict: `ready`,
+  `needs-migration`, or `at-risk`. Servers with no keylessly reachable MCP
+  endpoint get no readiness verdict at all rather than a guess. The result
+  appears as a `readiness` object in `akashi check --json` and in
+  `akashi scan` records, and as a `spec 2026-07-28` line in the human
+  output. The ruleset is pinned as `2026-07-28-rc` and accepts both the RC
+  and the renumbered final error codes; it will be re-verified against the
+  final specification on its 2026-07-28 publication day. The health verdict
+  is unchanged and stays a pure liveness measure.
 - The remote `initialize` probe now records its raw evidence when the
   handshake is conformant: the protocol version the server answered with, the
   sorted top-level server capability keys, and whether an `Mcp-Session-Id`
   header was issued (stateful-session usage). The fields appear in
   `akashi check --json` and in `akashi scan` records as `protocolVersion`,
-  `capabilities`, and `sessionIssued`; they are the observables a
-  2026-07-28 spec-readiness classification is computed from. The probe
-  records evidence, it does not judge readiness, and verdicts are unchanged.
+  `capabilities`, and `sessionIssued`; they are the observables the
+  readiness classification is computed from. The probe records evidence
+  first and judges only in the classification layer.
 
 ## [0.3.0] - 2026-07-02
 

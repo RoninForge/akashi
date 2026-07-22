@@ -46,6 +46,9 @@ type Engine struct {
 	// ProbeTools runs the go-sdk tools/list conformance probe on reachable,
 	// conformant remotes. Default true; a bulk scan can disable it for speed.
 	ProbeTools bool
+	// ProbeReadiness runs the 2026-07-28 spec-readiness pass against the
+	// first conformant remote. Default true.
+	ProbeReadiness bool
 	// ValidateServerJSON validates a registry server's server.json against its
 	// declared JSON Schema. Default true.
 	ValidateServerJSON bool
@@ -63,6 +66,7 @@ func NewEngine() *Engine {
 		RemoteTimeout:      12 * time.Second,
 		RequestTimeout:     15 * time.Second,
 		ProbeTools:         true,
+		ProbeReadiness:     true,
 		ValidateServerJSON: true,
 	}
 }
@@ -81,14 +85,34 @@ func (e *Engine) ProbeServer(ctx context.Context, s registry.Server) Result {
 	for _, p := range s.Packages {
 		sig.Packages = append(sig.Packages, e.checkPackage(ctx, p))
 	}
-	for _, rm := range s.Remotes {
-		sig.Remotes = append(sig.Remotes, e.checkRemote(ctx, rm))
+	var readiness *ReadinessSignal
+	for i, rm := range s.Remotes {
+		remote := e.checkRemote(ctx, rm)
+		sig.Remotes = append(sig.Remotes, remote)
+		if e.ProbeReadiness && readiness == nil && remote.Conformance == "initialize_ok" {
+			readiness = e.checkReadiness(ctx, s.Remotes[i].URL, s.Remotes[i].Type, remote)
+		}
 	}
 	if e.ValidateServerJSON && len(s.RawServer) > 0 {
 		sig.ServerJSON = e.validateServerJSON(ctx, s.RawServer)
 	}
 
 	res := classify(s, sig)
+	res.Readiness = readiness
+	if readiness != nil {
+		status := Warn
+		switch readiness.Verdict {
+		case ReadinessReady:
+			status = Pass
+		case ReadinessAtRisk:
+			status = Fail
+		}
+		detail := readiness.Verdict
+		if len(readiness.Reasons) > 0 {
+			detail += ": " + strings.Join(readiness.Reasons, ", ")
+		}
+		res.Checks = append(res.Checks, Check{Name: "spec 2026-07-28", Status: status, Detail: detail})
+	}
 	res.Title = s.Title
 	res.Description = s.Description
 	res.CheckedAt = e.now().UTC().Format("2006-01-02")
@@ -440,7 +464,8 @@ func (e *Engine) mcpInitialize(ctx context.Context, u string) initResult {
 			// it issued a session id (stateful-session usage). Classification
 			// happens downstream; the probe only preserves the evidence.
 			sig.ProtocolVersion, sig.Capabilities = parseInitializeResult(r.body)
-			issued := r.header.Get("Mcp-Session-Id") != ""
+			sig.sessionID = r.header.Get("Mcp-Session-Id")
+			issued := sig.sessionID != ""
 			sig.SessionIssued = &issued
 		} else {
 			// A 200 that is not a JSON-RPC MCP response: an HTML page or proxy
