@@ -8,18 +8,10 @@ It emits an embeddable "verified on DATE" badge for the healthy ones.
 
 The name means "proof" or "certificate" (証) in Japanese.
 
-## Zero keys, by construction
-
-akashi reads only public endpoints: the official MCP registry, the GitHub API,
-the npm and PyPI registries, Docker Hub's anonymous manifest API, and the
-server's own remote endpoint via a capability-only MCP `initialize` handshake.
-
-It never authenticates to a probed server and never runs one of its tools. The
-`initialize` request negotiates protocol capabilities and executes nothing, so
-it is safe to send to a server you do not trust. Any GitHub token akashi finds
-(`GITHUB_TOKEN`, `GH_TOKEN`, or your local `gh`) is used only against the public
-GitHub API to raise the rate limit, exactly as a human running `gh` would. No
-user secret is ever sent to a probed server.
+**Zero keys, by construction.** akashi reads only public endpoints and never
+authenticates to a probed server, never runs one of its tools, and never sends a
+user secret to one. Why that holds and what it rules out:
+**<https://roninforge.org/akashi/>**
 
 ## Install
 
@@ -136,37 +128,19 @@ count are tunable with `--concurrency`, `--timeout`, and `--limit`.
 
 ## What it checks
 
-**Health** (can I get and run this at all):
+**Health**: registry status, repository reachable and fresh, package published,
+remote endpoint answers, at least one live entrypoint.
 
-- Registry status: the registry has not deprecated or deleted it.
-- Repository reachable: the source still exists (not 404, not archived).
-- Repository freshness: last push under 90 days (pass), under a year (warn),
-  over a year (fail).
-- Package published: the npm, PyPI, or Docker Hub entrypoint installs.
-- Remote reachable: the hosted endpoint answers. akashi tries a capability-only
-  MCP `initialize` handshake first (which also yields the conformance signal),
-  and falls back to a plain GET for transports the handshake cannot exercise
-  (for example an SSE endpoint), so a transport mismatch is never called dead.
-- At least one live entrypoint: something is actually usable.
+**Conformance**: `server.json` validates against its declared schema, the
+`initialize` handshake negotiates a protocol version, the JSON-RPC response
+echoes the request id, `tools/list` resolves over a full MCP session, a license
+is declared.
 
-**Conformance** (is it a well-behaved MCP server):
+An auth-gated remote (401/403 to `initialize`) is treated as alive, not broken.
+akashi never supplies credentials to reach past it.
 
-- `server.json` validates against the JSON Schema it declares. An invalid
-  manifest downgrades the verdict to degraded.
-- `initialize` handshake negotiates a protocol version.
-- The JSON-RPC response echoes the request id (not an HTML page impersonating a
-  server with a 200).
-- `tools/list` resolves over a full MCP session, using the official
-  [MCP go-sdk](https://github.com/modelcontextprotocol/go-sdk) client. This is
-  the strongest keyless proof that the endpoint is a real, working server (a raw
-  `initialize` 200 only shows it answered one request). It runs no tool: it
-  connects, reads the advertised tool list, and closes. It is informational and
-  never downgrades the verdict, since many valid servers advertise no tools.
-- A license is declared.
-
-An auth-gated remote (a 401/403 to `initialize`) is treated as alive, not
-broken. akashi never supplies credentials to reach past it, and does not attempt
-`tools/list` against it.
+Every check, what it does and does not downgrade, and why:
+[the full check catalog](https://roninforge.org/akashi/).
 
 ## Verdicts
 
@@ -208,6 +182,12 @@ Fail CI when a server you depend on is not healthy:
 
 MIT. See [LICENSE](LICENSE).
 
-Part of [RoninForge](https://roninforge.org). Sibling tools:
-[hanko](https://github.com/RoninForge/hanko) (plugin manifest validator),
-[tsuba](https://github.com/RoninForge/tsuba) (skill scaffolder).
+## Docs
+
+- [Every check, the verdict rules and the FAQ](https://roninforge.org/akashi/)
+- [State of MCP: what the whole registry looks like, measured with akashi](https://roninforge.org/data/state-of-mcp/)
+- [2026-07-28 spec-readiness across the registry](https://roninforge.org/data/state-of-mcp/spec-readiness/)
+- [hanko, the Claude Code plugin manifest validator](https://roninforge.org/hanko/)
+- [tsuba, the skill and plugin scaffolder](https://roninforge.org/tsuba/)
+
+akashi is part of [RoninForge.org](https://roninforge.org).
