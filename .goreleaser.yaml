@@ -98,3 +98,5 @@ release:
     ---
 
     **Full changelog**: https://github.com/RoninForge/akashi/compare/{{ .PreviousTag }}...{{ .Tag }}
+
+    **Every check, the verdict rules, and the registry-wide census**: https://roninforge.org/akashi/
