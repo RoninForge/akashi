@@ -41,7 +41,13 @@ and rerun with the same --out to pick up where it left off.`,
 
 			eng := probe.NewEngine()
 			eng.GitHubToken = githubToken(ctx)
-			eng.HTTP = &http.Client{Transport: scan.NewGitHubBackoffTransport(nil)}
+			// Keep NewEngine's whole-request backstop when swapping in the
+			// GitHub backoff transport; replacing the client wholesale is how
+			// the census lost it and hung on a context-free SDK teardown.
+			eng.HTTP = &http.Client{
+				Transport: scan.NewGitHubBackoffTransport(nil),
+				Timeout:   probe.HTTPClientTimeout,
+			}
 
 			summary, err := scan.Run(ctx, client, eng, opts)
 			if err != nil {

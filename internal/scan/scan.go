@@ -34,6 +34,14 @@ const RecordsFile = "records.jsonl"
 // SummaryFile is the aggregate-report filename written inside --out.
 const SummaryFile = "summary.json"
 
+// StartedFile records when the census FIRST began, inside --out. A resumed
+// run reports the window of the whole census, not of its final leg: without
+// this, a run interrupted at 99% and resumed reports a few minutes for a
+// population that took hours, which is a false provenance claim in a dataset
+// whose value is that its provenance is checkable. probe.Result.CheckedAt is
+// a date, not a timestamp, so the start cannot be recovered from the records.
+const StartedFile = "scan.started"
+
 // DefaultConcurrency is a modest worker pool size: polite to the registry,
 // package indexes, and remote endpoints a census touches, while still
 // finishing a full drain of the registry in a practical amount of time.
@@ -132,7 +140,10 @@ func Run(ctx context.Context, client *registry.Client, eng *probe.Engine, opts O
 	recordsPath := filepath.Join(opts.Out, RecordsFile)
 	summaryPath := filepath.Join(opts.Out, SummaryFile)
 
-	started := time.Now().UTC()
+	started, err := censusStart(filepath.Join(opts.Out, StartedFile), time.Now().UTC())
+	if err != nil {
+		return Summary{}, err
+	}
 
 	servers, err := client.Drain(ctx, opts.Limit)
 	if err != nil {
@@ -270,6 +281,24 @@ func probeAll(ctx context.Context, eng *probe.Engine, servers []registry.Server,
 		onResultErr = onResult(r)
 	}
 	return onResultErr
+}
+
+// censusStart returns the instant this census began, reading it back from
+// path when a previous leg of the same census already recorded one and
+// writing now there otherwise. A missing or unparseable marker falls back to
+// now rather than failing the run: a slightly-late start stamp is a smaller
+// problem than refusing to finish a census that is already probed.
+func censusStart(path string, now time.Time) (time.Time, error) {
+	// #nosec G304 -- path is derived from --out, an operator-supplied CLI flag.
+	if b, err := os.ReadFile(path); err == nil {
+		if t, perr := time.Parse(time.RFC3339, strings.TrimSpace(string(b))); perr == nil {
+			return t.UTC(), nil
+		}
+	}
+	if err := os.WriteFile(path, []byte(now.Format(time.RFC3339)+"\n"), 0o600); err != nil {
+		return time.Time{}, fmt.Errorf("scan: write %s: %w", path, err)
+	}
+	return now, nil
 }
 
 // loadCheckpoint reads an existing RecordsFile (if any) and returns the

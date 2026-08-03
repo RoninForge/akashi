@@ -57,10 +57,30 @@ type Engine struct {
 	schemaCache map[string]*jsonschema.Schema
 }
 
+// HTTPClientTimeout is a whole-request backstop on every probe client.
+//
+// It is NOT the probe's normal budget: RemoteTimeout, RequestTimeout and the
+// per-server context all expire long before it, so in ordinary operation it
+// never fires. It exists because a context deadline cannot protect a call
+// that never receives the context, and at least one such call is on the hot
+// path. The MCP Go SDK tears a failed session down in
+// streamableClientConn.Close, which issues its session-delete request on a
+// context-free client, by design: cleanup must not be skipped just because
+// the caller's context was already cancelled. Against an endpoint that
+// completes a TCP handshake and then never answers, that request has nothing
+// to bound it.
+//
+// Lived consequence, 2026-08-03: one such endpoint hung a worker on the final
+// server of a 19,788-server census. The per-server 60s deadline had already
+// expired and could not help. The pool drained, the WaitGroup never
+// completed, and the run sat blocked in probeAll for 95 minutes with no
+// summary written, after four and a half hours of good work.
+const HTTPClientTimeout = 60 * time.Second
+
 // NewEngine returns an Engine with sane defaults.
 func NewEngine() *Engine {
 	return &Engine{
-		HTTP:               &http.Client{},
+		HTTP:               &http.Client{Timeout: HTTPClientTimeout},
 		UserAgent:          DefaultUserAgent,
 		Now:                time.Now,
 		RemoteTimeout:      12 * time.Second,

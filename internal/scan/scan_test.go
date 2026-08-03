@@ -198,6 +198,53 @@ func TestRunResumeSkipsAlreadyDone(t *testing.T) {
 	if len(secondLines) != 2 {
 		t.Errorf("records.jsonl grew to %d lines after resume, want still 2 (no duplicate records)", len(secondLines))
 	}
+	// A resumed run reports the window of the WHOLE census, not of its final
+	// leg. Reporting the resume instant would claim a population took the
+	// seconds the last leg took, which is a false provenance claim.
+	if summary2.StartedAt != summary1.StartedAt {
+		t.Errorf("resumed StartedAt = %q, want the first run's %q", summary2.StartedAt, summary1.StartedAt)
+	}
+}
+
+func TestCensusStartIsRecordedOnceAndReusedOnResume(t *testing.T) {
+	path := filepath.Join(t.TempDir(), StartedFile)
+	first := time.Date(2026, 8, 3, 7, 42, 54, 0, time.UTC)
+
+	got, err := censusStart(path, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Equal(first) {
+		t.Fatalf("first call = %v, want %v", got, first)
+	}
+
+	// A later leg of the same census must inherit the original start, not
+	// stamp its own.
+	later := first.Add(5 * time.Hour)
+	got, err = censusStart(path, later)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Equal(first) {
+		t.Errorf("resumed call = %v, want the recorded %v", got, first)
+	}
+}
+
+func TestCensusStartFallsBackWhenMarkerIsUnreadable(t *testing.T) {
+	// A corrupt marker must not block a census that is already probed: a
+	// slightly-late start stamp beats refusing to write a summary at all.
+	path := filepath.Join(t.TempDir(), StartedFile)
+	if err := os.WriteFile(path, []byte("not a timestamp"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+	got, err := censusStart(path, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Equal(now) {
+		t.Errorf("got %v, want the fallback %v", got, now)
+	}
 }
 
 // --- name validation surfaced in the summary ---
