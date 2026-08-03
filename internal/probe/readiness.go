@@ -8,10 +8,13 @@
 // read mirrors what mcp-spec-check ships as a standard check.
 //
 // Ruleset: strategy/mcp-readiness-2026-07/RULESET.md in the RoninForge
-// planning repo, compiled from the official 2026-07-28 draft changelog. The
-// spec is a release candidate until 2026-07-28; RulesetVersion pins which
-// revision of the rules produced a verdict, and the numeric error codes
-// accept both the RC and the renumbered final values.
+// planning repo, compiled from the 2026-07-28 draft changelog and re-diffed
+// against the published final text on 2026-08-03 with no verdict-bearing rule
+// changed. RulesetVersion pins which revision of the rules produced a verdict.
+// The numeric error codes still accept both the RC and the renumbered final
+// values, and must keep doing so: servers built against the RC are real and
+// still enforcing, so narrowing to the final numbers would silently reclassify
+// them as not enforcing at all.
 package probe
 
 import (
@@ -27,9 +30,19 @@ import (
 )
 
 // RulesetVersion identifies the readiness ruleset a verdict was computed
-// under. Bump to "2026-07-28" after re-diffing the final changelog on
-// publication day.
-const RulesetVersion = "2026-07-28-rc"
+// under.
+//
+// Re-diffed against the final specification text on 2026-08-03: every
+// verdict-bearing rule is unchanged from the RC, the error renumbering landed
+// exactly as the ruleset anticipated (and the probe already accepts both
+// numbers), and the only removal absent from the ruleset is not keylessly
+// observable. So no rule changed here, only the name: what was provisional is
+// now confirmed.
+//
+// Censuses already stamped "2026-07-28-rc" keep that stamp. It names the
+// revision that actually computed them, and rewriting a published record to
+// look tidier is the one edit a provenance dataset must never make.
+const RulesetVersion = "2026-07-28"
 
 // readinessCallTimeout bounds each individual readiness request, so the whole
 // pass stays inside a census's per-server budget even against a slow server.
