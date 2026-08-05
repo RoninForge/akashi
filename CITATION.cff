@@ -1,0 +1,26 @@
+# Machine-readable citation metadata. GitHub renders a "Cite this repository" button from this file.
+cff-version: 1.2.0
+title: "RoninForge Akashi"
+message: "If you use this software, please cite it using the metadata in this file."
+type: software
+authors:
+  - name: "RoninForge"
+    email: "jens@rasta.online"
+    website: "https://roninforge.org"
+abstract: >-
+  RoninForge Akashi is a keyless MCP server health checker that verifies a Model
+  Context Protocol server is alive and conformant using only public,
+  unauthenticated probes, and emits an embeddable verified-on-date badge. It is
+  MIT licensed, runs entirely on your machine, and requires no API keys. Akashi
+  is the instrument behind the State of MCP census.
+url: "https://roninforge.org/akashi"
+repository-code: "https://github.com/RoninForge/akashi"
+license: MIT
+version: v0.3.0
+date-released: 2026-07-02
+keywords:
+  - Model Context Protocol
+  - MCP
+  - server health
+  - protocol conformance
+  - command-line tool
