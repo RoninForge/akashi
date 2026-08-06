@@ -16,8 +16,8 @@ abstract: >-
 url: "https://roninforge.org/akashi"
 repository-code: "https://github.com/RoninForge/akashi"
 license: MIT
-version: v0.3.0
-date-released: 2026-07-02
+version: v0.4.0
+date-released: 2026-08-06
 keywords:
   - Model Context Protocol
   - MCP

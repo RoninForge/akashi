@@ -6,6 +6,8 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-06
+
 ### Added
 
 - A 2026-07-28 spec-readiness pass. Against a server's first conformant
@@ -18,10 +20,9 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   endpoint get no readiness verdict at all rather than a guess. The result
   appears as a `readiness` object in `akashi check --json` and in
   `akashi scan` records, and as a `spec 2026-07-28` line in the human
-  output. The ruleset is pinned as `2026-07-28-rc` and accepts both the RC
-  and the renumbered final error codes; it will be re-verified against the
-  final specification on its 2026-07-28 publication day. The health verdict
-  is unchanged and stays a pure liveness measure.
+  output. The health verdict is unchanged and stays a pure liveness measure.
+- `CITATION.cff`, so GitHub renders a "Cite this repository" button and
+  citation tooling can resolve the project without scraping the README.
 - The remote `initialize` probe now records its raw evidence when the
   handshake is conformant: the protocol version the server answered with, the
   sorted top-level server capability keys, and whether an `Mcp-Session-Id`
@@ -30,6 +31,25 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `capabilities`, and `sessionIssued`; they are the observables the
   readiness classification is computed from. The probe records evidence
   first and judges only in the classification layer.
+
+### Changed
+
+- The 2026-07-28 readiness ruleset is final, not a release candidate. The
+  encoded rules were re-diffed against the published final specification on
+  2026-08-03 and every verdict-bearing rule is unchanged from the RC: all
+  eighteen breaking changes and deprecations appear with matching SEP or PR
+  numbers, and the error renumbering landed as anticipated. New scans stamp
+  `2026-07-28`; censuses already stamped `2026-07-28-rc` keep that stamp,
+  because it names the revision that actually computed them. Acceptance of
+  both the RC and the final error codes stays, deliberately: the 2026-08-03
+  census found 37 servers still returning the RC `-32001` against 45 on the
+  final `-32020`, so narrowing to the final numbers would silently reclassify
+  a real, enforcing cohort as not enforcing at all.
+
+### Fixed
+
+- Every probe request is now bounded by its own timeout, and a resumed census
+  keeps its real start time instead of resetting it.
 
 ## [0.3.0] - 2026-07-02
 
