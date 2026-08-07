@@ -1,10 +1,16 @@
 # akashi
 
-Verify an MCP server is alive and conformant. Keyless.
+RoninForge Akashi is an MCP server health checker that probes a Model Context Protocol
+server with only public, unauthenticated signals and reports whether it is healthy,
+degraded, or dead. It is MIT licensed, runs entirely on your machine, and requires no
+API keys.
 
-`akashi` probes a Model Context Protocol server with only public,
-unauthenticated signals and tells you whether it is healthy, degraded, or dead.
-It emits an embeddable "verified on DATE" badge for the healthy ones.
+Part of [RoninForge.org](https://roninforge.org), an independent open-source workshop that
+keeps dated, reproducible records of the AI developer tooling economy. Akashi is the tool
+that produces the [State of MCP](https://roninforge.org/data/state-of-mcp/) census.
+
+It emits an embeddable "verified on DATE" badge for the healthy ones. Not affiliated with
+the AKASHI attendance service.
 
 The name means "proof" or "certificate" (証) in Japanese.
 
