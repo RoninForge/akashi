@@ -69,6 +69,18 @@ type Options struct {
 	// verdict"), plus a startup line noting how many were already recorded.
 	// A nil Progress disables progress reporting.
 	Progress io.Writer
+
+	// Compare is a previous census directory (or its records.jsonl). Given
+	// one, a second pass re-probes every namespace whose aggregate signals
+	// moved against that edition and records what it finds, so a transient
+	// outage inside a long scan window shows up as a dated observation about
+	// one operator instead of a trend in a published rate. Empty disables it.
+	Compare string
+	// ReprobeThreshold, ReprobeMinServers and ReprobeMaxServers tune that
+	// pass; each falls back to its DefaultReprobe* constant when <= 0.
+	ReprobeThreshold float64
+	ReprobeMinServers int
+	ReprobeMaxServers int
 }
 
 // Breakdown is a verdict census over some population: the whole run, or one
@@ -93,6 +105,10 @@ type Summary struct {
 
 	// Overall is the verdict census across every server this run targeted.
 	Overall Breakdown `json:"overall"`
+	// Reprobe is the second-pass report, present only when Options.Compare
+	// named a previous edition. Its readings live in ReprobeFile; records.jsonl
+	// stays the census exactly as first observed.
+	Reprobe *ReprobeReport `json:"reprobe,omitempty"`
 	// Segments key the same kind of census by a defining trait. "remote"
 	// (servers that declare at least one hosted remote endpoint) is the
 	// headline: a reachable, conformant remote is the strongest keyless
@@ -205,6 +221,20 @@ func Run(ctx context.Context, client *registry.Client, eng *probe.Engine, opts O
 		return Summary{}, err
 	}
 
+	// Second pass, before the summary is written so its findings ship with the
+	// census rather than in a note someone has to remember to add later.
+	var reprobe *ReprobeReport
+	if strings.TrimSpace(opts.Compare) != "" {
+		prevResults, perr := loadEdition(opts.Compare)
+		if perr != nil {
+			return Summary{}, fmt.Errorf("scan: read --compare edition: %w", perr)
+		}
+		reprobe, err = runReprobe(ctx, eng, opts, servers, results, prevResults, progress)
+		if err != nil {
+			return Summary{}, err
+		}
+	}
+
 	finished := time.Now().UTC()
 	summary := Summary{
 		RegistryBaseURL: client.BaseURL,
@@ -213,6 +243,7 @@ func Run(ctx context.Context, client *registry.Client, eng *probe.Engine, opts O
 		Limit:           opts.Limit,
 		StartedAt:       started.Format(time.RFC3339),
 		FinishedAt:      finished.Format(time.RFC3339),
+		Reprobe:         reprobe,
 		Overall:         summarize(results),
 		Segments: map[string]Breakdown{
 			"remote": summarize(remoteBearing(results)),

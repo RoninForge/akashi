@@ -126,6 +126,30 @@ A scan resumes automatically: rerun with the same `--out` and servers already
 recorded are not re-probed. Concurrency, the per-server timeout, and the server
 count are tunable with `--concurrency`, `--timeout`, and `--limit`.
 
+### A long scan is not a snapshot
+
+A full census takes hours, and over a window that long a single operator's
+outage lands in the data as if it were a property of its servers. Point
+`--compare` at the previous census and a second pass re-probes every namespace
+whose aggregate signal rates moved against it:
+
+```
+akashi scan --out ./census-2026-09-09 --compare ./census-2026-08-03
+```
+
+That writes a third file, `reprobe.jsonl`, holding the second reading for each
+re-probed server, and a `reprobe` report in `summary.json` saying which
+namespaces moved, on which signal, and whether the second reading agreed.
+
+It never edits `records.jsonl`. The census stays exactly as it was observed and
+the second reading is recorded beside it, so what gets published is still one
+dated observation plus the evidence needed to read it honestly.
+
+A namespace needs at least `--reprobe-min-servers` servers (default 25) to
+qualify, because one server blinking is a large percentage of a small
+namespace, and the pass stops after `--reprobe-max-servers` (default 3000),
+recording `truncated` rather than reading as a clean result it did not earn.
+
 ## What it checks
 
 **Health**: registry status, repository reachable and fresh, package published,
