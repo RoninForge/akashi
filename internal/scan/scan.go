@@ -78,7 +78,7 @@ type Options struct {
 	Compare string
 	// ReprobeThreshold, ReprobeMinServers and ReprobeMaxServers tune that
 	// pass; each falls back to its DefaultReprobe* constant when <= 0.
-	ReprobeThreshold float64
+	ReprobeThreshold  float64
 	ReprobeMinServers int
 	ReprobeMaxServers int
 }
@@ -340,7 +340,9 @@ func censusStart(path string, now time.Time) (time.Time, error) {
 // and appends a fresh record after it. The file itself is never rewritten,
 // only appended to, which is what keeps resume crash-safe.
 func loadCheckpoint(path string) (map[string]probe.Result, error) {
-	// #nosec G304 -- path is derived from --out, an operator-supplied CLI flag.
+	// #nosec G304,G703 -- path names a dataset file to read, and comes from
+	// --out or --compare: operator-supplied CLI flags, exactly like any
+	// file-reading CLI tool takes a path from its caller.
 	f, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return map[string]probe.Result{}, nil

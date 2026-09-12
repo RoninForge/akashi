@@ -339,6 +339,8 @@ func runReprobe(
 // an operator has to hand.
 func loadEdition(path string) ([]probe.Result, error) {
 	p := path
+	// #nosec G703 -- path is --compare, an operator-supplied CLI flag naming a
+	// previous census to read.
 	if fi, err := os.Stat(p); err == nil && fi.IsDir() {
 		p = filepath.Join(p, RecordsFile)
 	}
