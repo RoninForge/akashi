@@ -29,6 +29,19 @@ It writes two files into --out:
                    nameIssues report on registry names that would not survive
                    per-server page routing
 
+With --compare pointing at a previous census, a second pass re-probes every
+namespace whose aggregate signals moved against that edition and writes a
+third file:
+
+  reprobe.jsonl   the second reading for each re-probed server, in the same
+                   shape as records.jsonl
+
+A long scan is not a snapshot: over a window of hours one operator's outage
+lands in the data as if it were a property of its servers. The second pass is
+what tells the two apart. It NEVER edits records.jsonl, which stays the census
+exactly as first observed; the second reading is evidence recorded beside it,
+and summary.json carries what it found.
+
 A scan resumes automatically: if --out already has a records.jsonl from a
 previous run, servers already recorded in it are not re-probed. Interrupt
 and rerun with the same --out to pick up where it left off.`,
@@ -65,6 +78,10 @@ and rerun with the same --out to pick up where it left off.`,
 	cmd.Flags().IntVar(&opts.Limit, "limit", 0, "cap the number of servers drained from the registry (0 = the whole registry)")
 	cmd.Flags().IntVar(&opts.Concurrency, "concurrency", scan.DefaultConcurrency, "number of servers probed in parallel")
 	cmd.Flags().DurationVar(&opts.Timeout, "timeout", scan.DefaultTimeout, "time budget for one server's full probe set")
+	cmd.Flags().StringVar(&opts.Compare, "compare", "", "previous census dir (or its records.jsonl) to re-probe drifting namespaces against")
+	cmd.Flags().Float64Var(&opts.ReprobeThreshold, "reprobe-threshold", scan.DefaultReprobeThreshold, "percentage points a namespace's signal rate must move to earn a second reading")
+	cmd.Flags().IntVar(&opts.ReprobeMinServers, "reprobe-min-servers", scan.DefaultReprobeMinServers, "ignore namespaces smaller than this when looking for drift")
+	cmd.Flags().IntVar(&opts.ReprobeMaxServers, "reprobe-max-servers", scan.DefaultReprobeMaxServers, "cap how many servers the second pass re-probes")
 	_ = cmd.MarkFlagRequired("out")
 	return cmd
 }

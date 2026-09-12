@@ -10,6 +10,22 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `akashi scan --compare <previous census>` runs a second pass after the
+  census: it compares each namespace's aggregate signal rates against that
+  edition and re-probes every namespace whose rates moved by at least
+  `--reprobe-threshold` points (default 10), writing each second reading to
+  `reprobe.jsonl` and a report into `summary.json`. A scan long enough for
+  targets to change state records a transient outage as a property of the
+  things measured: the 2026-09-09 census ran 16h59m and one operator's
+  endpoints flipped 1,277 stateless-true readings to 270 while its health
+  verdicts barely moved, which took a human to notice after publication. This
+  pass is what notices. It never edits `records.jsonl`, which stays the census
+  exactly as first observed; the second reading is evidence recorded beside it.
+  `--reprobe-min-servers` (default 25) keeps small namespaces out, where one
+  server blinking is a large percentage, and `--reprobe-max-servers`
+  (default 3000) bounds the pass's wall time, recording `truncated` in the
+  report rather than silently reading as a complete all-clear.
+
 - A 2026-07-28 spec-readiness pass. Against a server's first conformant
   remote, akashi now runs a handful of extra read-only, keyless calls (a
   handshake-free `tools/list`, `server/discover`, a routing-header mismatch
