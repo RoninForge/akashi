@@ -205,7 +205,7 @@ func TestRunReprobesADriftingNamespaceWithoutTouchingTheCensus(t *testing.T) {
 
 	// The census file is the observation and is never edited by the second
 	// pass: exactly the servers probed once, still one line each.
-	if got := len(readLines(t, filepath.Join(out, RecordsFile))); got != 30 {
+	if got := len(readRecordLines(t, out)); got != 30 {
 		t.Fatalf("records.jsonl must still hold 30 lines, got %d", got)
 	}
 	if got := len(readLines(t, filepath.Join(out, ReprobeFile))); got != 30 {

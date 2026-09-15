@@ -72,7 +72,7 @@ func TestScanHelp(t *testing.T) {
 	if code != 0 {
 		t.Errorf("scan --help exit = %d, want 0", code)
 	}
-	for _, want := range []string{"records.jsonl", "summary.json", "--out", "--concurrency"} {
+	for _, want := range []string{"records/", "records/manifest.json", "summary.json", "--out", "--concurrency"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("scan --help output missing %q", want)
 		}

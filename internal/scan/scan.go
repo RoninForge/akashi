@@ -8,11 +8,8 @@
 package scan
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,7 +20,6 @@ import (
 
 	"github.com/RoninForge/akashi/internal/probe"
 	"github.com/RoninForge/akashi/internal/registry"
-	"github.com/RoninForge/akashi/internal/report"
 	"github.com/RoninForge/akashi/internal/version"
 )
 
@@ -153,7 +149,6 @@ func Run(ctx context.Context, client *registry.Client, eng *probe.Engine, opts O
 	if err := os.MkdirAll(opts.Out, 0o700); err != nil {
 		return Summary{}, fmt.Errorf("scan: create out dir: %w", err)
 	}
-	recordsPath := filepath.Join(opts.Out, RecordsFile)
 	summaryPath := filepath.Join(opts.Out, SummaryFile)
 
 	started, err := censusStart(filepath.Join(opts.Out, StartedFile), time.Now().UTC())
@@ -175,7 +170,7 @@ func Run(ctx context.Context, client *registry.Client, eng *probe.Engine, opts O
 			nameIssues.BadCharset.Count, nameIssues.BadShape.Count, nameIssues.CaseCollisions.Count)
 	}
 
-	done, err := loadCheckpoint(recordsPath)
+	done, err := ReadRecords(opts.Out)
 	if err != nil {
 		return Summary{}, fmt.Errorf("scan: read checkpoint: %w", err)
 	}
@@ -194,23 +189,17 @@ func Run(ctx context.Context, client *registry.Client, eng *probe.Engine, opts O
 	completed := total - len(pending)
 	fmt.Fprintf(progress, "%d/%d already recorded, probing %d\n", completed, total, len(pending))
 
-	// #nosec G304 -- recordsPath is derived from --out, an operator-supplied
-	// CLI flag naming where to write the dataset, exactly like any
-	// file-writing CLI tool.
-	f, err := os.OpenFile(recordsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	w, err := newRecordWriter(opts.Out)
 	if err != nil {
-		return Summary{}, fmt.Errorf("scan: open %s: %w", recordsPath, err)
+		return Summary{}, err
 	}
-	defer func() { _ = f.Close() }()
+	defer func() { _ = w.Close() }()
 
 	if err := probeAll(ctx, eng, pending, opts.Concurrency, opts.Timeout, func(r probe.Result) error {
 		completed++
 		fmt.Fprintf(progress, "%d/%d %s %s\n", completed, total, r.Name, r.Verdict)
 		results = append(results, r)
-		if err := report.WriteJSONLine(f, r); err != nil {
-			return fmt.Errorf("scan: write record for %s: %w", r.Name, err)
-		}
-		return f.Sync()
+		return w.Write(r)
 	}); err != nil {
 		return Summary{}, err
 	}
@@ -251,6 +240,14 @@ func Run(ctx context.Context, client *registry.Client, eng *probe.Engine, opts O
 		NameIssues: nameIssues,
 	}
 
+	// Written after the last shard is flushed, so the manifest can never claim
+	// a count the shards do not hold.
+	if err := w.Close(); err != nil {
+		return Summary{}, fmt.Errorf("scan: close records: %w", err)
+	}
+	if err := writeRecordsManifest(opts.Out, results); err != nil {
+		return Summary{}, err
+	}
 	if err := writeSummary(summaryPath, summary); err != nil {
 		return Summary{}, err
 	}
@@ -330,46 +327,6 @@ func censusStart(path string, now time.Time) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("scan: write %s: %w", path, err)
 	}
 	return now, nil
-}
-
-// loadCheckpoint reads an existing RecordsFile (if any) and returns the
-// results already recorded, keyed by server name, so Run can skip
-// re-probing them. A line that fails to parse (for example a partial write
-// left by a hard kill mid-record) is skipped rather than treated as fatal:
-// it is simply not counted as done, so a later run re-probes that one server
-// and appends a fresh record after it. The file itself is never rewritten,
-// only appended to, which is what keeps resume crash-safe.
-func loadCheckpoint(path string) (map[string]probe.Result, error) {
-	// #nosec G304,G703 -- path names a dataset file to read, and comes from
-	// --out or --compare: operator-supplied CLI flags, exactly like any
-	// file-reading CLI tool takes a path from its caller.
-	f, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return map[string]probe.Result{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = f.Close() }()
-
-	done := make(map[string]probe.Result)
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64<<10), 8<<20)
-	for sc.Scan() {
-		line := bytes.TrimSpace(sc.Bytes())
-		if len(line) == 0 {
-			continue
-		}
-		var r probe.Result
-		if err := json.Unmarshal(line, &r); err != nil || r.Name == "" {
-			continue
-		}
-		done[r.Name] = r
-	}
-	if err := sc.Err(); err != nil {
-		return nil, err
-	}
-	return done, nil
 }
 
 // writeSummary writes summary as pretty-printed JSON to path.

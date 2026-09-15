@@ -334,22 +334,36 @@ func runReprobe(
 	return rep, nil
 }
 
-// loadEdition reads a previous census's records, accepting either the census
-// directory or its records.jsonl directly, so --compare takes whichever path
-// an operator has to hand.
+// loadEdition reads a previous census's records, accepting the census
+// directory (sharded or legacy layout), its records/ dir, or a single
+// records.jsonl directly, so --compare takes whichever path an operator has
+// to hand.
 func loadEdition(path string) ([]probe.Result, error) {
-	p := path
+	byName := make(map[string]probe.Result)
 	// #nosec G703 -- path is --compare, an operator-supplied CLI flag naming a
 	// previous census to read.
-	if fi, err := os.Stat(p); err == nil && fi.IsDir() {
-		p = filepath.Join(p, RecordsFile)
-	}
-	byName, err := loadCheckpoint(p)
-	if err != nil {
+	fi, err := os.Stat(path)
+	switch {
+	case err != nil:
 		return nil, err
+	case fi.IsDir():
+		byName, err = ReadRecords(path)
+		if err != nil {
+			return nil, err
+		}
+		if len(byName) == 0 {
+			// The operator pointed at records/ itself rather than its parent.
+			if err := readShardDir(path, byName); err != nil {
+				return nil, err
+			}
+		}
+	default:
+		if err := readRecordFile(path, byName); err != nil {
+			return nil, err
+		}
 	}
 	if len(byName) == 0 {
-		return nil, fmt.Errorf("no usable records in %s", p)
+		return nil, fmt.Errorf("no usable records in %s", path)
 	}
 	out := make([]probe.Result, 0, len(byName))
 	for _, r := range byName {
