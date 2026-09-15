@@ -64,6 +64,21 @@ func readLines(t *testing.T, path string) []string {
 	return lines
 }
 
+// readRecordLines returns every census record line a scan wrote to outDir,
+// across all shards, in shard-file order.
+func readRecordLines(t *testing.T, outDir string) []string {
+	t.Helper()
+	paths, err := RecordPaths(outDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lines []string
+	for _, p := range paths {
+		lines = append(lines, readLines(t, p)...)
+	}
+	return lines
+}
+
 // --- drain / limit ---
 
 const fiveServers = `{
@@ -99,7 +114,7 @@ func TestRunDrainsAndLimits(t *testing.T) {
 		t.Errorf("registryBaseUrl = %q, want %q", summary.RegistryBaseURL, client.BaseURL)
 	}
 
-	lines := readLines(t, filepath.Join(outDir, RecordsFile))
+	lines := readRecordLines(t, outDir)
 	if len(lines) != 3 {
 		t.Fatalf("records.jsonl has %d lines, want 3", len(lines))
 	}
@@ -173,7 +188,7 @@ func TestRunResumeSkipsAlreadyDone(t *testing.T) {
 	if summary1.Overall.Counts[probe.Healthy] != 1 || summary1.Overall.Counts[probe.Unknown] != 1 {
 		t.Fatalf("first run counts = %+v, want one healthy one unknown", summary1.Overall.Counts)
 	}
-	firstLines := readLines(t, filepath.Join(outDir, RecordsFile))
+	firstLines := readRecordLines(t, outDir)
 	if len(firstLines) != 2 {
 		t.Fatalf("records.jsonl has %d lines after the first run, want 2", len(firstLines))
 	}
@@ -194,7 +209,7 @@ func TestRunResumeSkipsAlreadyDone(t *testing.T) {
 	if summary2.Overall.Counts[probe.Healthy] != 1 || summary2.Overall.Counts[probe.Unknown] != 1 {
 		t.Errorf("resumed run counts = %+v, want the same as the first run", summary2.Overall.Counts)
 	}
-	secondLines := readLines(t, filepath.Join(outDir, RecordsFile))
+	secondLines := readRecordLines(t, outDir)
 	if len(secondLines) != 2 {
 		t.Errorf("records.jsonl grew to %d lines after resume, want still 2 (no duplicate records)", len(secondLines))
 	}
