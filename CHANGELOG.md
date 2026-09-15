@@ -6,9 +6,21 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [0.4.0] - 2026-08-06
+## [0.5.0] - 2026-09-15
 
 ### Added
+
+- `akashi scan` writes the census as `records/<NN>.jsonl`, 64 shards keyed on
+  a FNV-1a hash of the server's namespace, plus `records/manifest.json` with
+  per-shard counts and a namespace-to-shard map. The single `records.jsonl`
+  reached 51.5 MiB at 31,538 servers, past the 50 MiB GitHub warns at, and at
+  2,198 bytes per server the 100 MiB hard push limit lands near 47,700: the
+  census that crossed it could not have been pushed at all, discovered at
+  publish time with the scan already spent. Re-sharding the real 2026-09-13
+  census gives a largest shard of 5.9 MiB. Keying on the namespace rather than
+  the record means a namespace is never split, so one operator's servers are
+  always in exactly one file and can be fetched without the whole census.
+  Nothing about a record changed, only which file it sits in.
 
 - `akashi scan --compare <previous census>` runs a second pass after the
   census: it compares each namespace's aggregate signal rates against that
@@ -25,6 +37,25 @@ to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   server blinking is a large percentage, and `--reprobe-max-servers`
   (default 3000) bounds the pass's wall time, recording `truncated` in the
   report rather than silently reading as a complete all-clear.
+
+### Changed
+
+- Censuses written before sharding keep their single `records.jsonl` and are
+  still read: `scan` resolves shards first and falls back, so resume, and
+  `--compare` against any historical edition, keep working. `--compare` takes
+  a census directory, a `records/` directory, or a single `records.jsonl`.
+  Verified by running the published build's vendor step against the real
+  2026-09-13 census in both layouts: byte-identical output from each.
+
+### Fixed
+
+- The `--compare` entry above was filed under 0.4.0 when it merged, but
+  v0.4.0 was tagged 2026-08-06 and does not contain it. Moved to the release
+  that actually ships it.
+
+## [0.4.0] - 2026-08-06
+
+### Added
 
 - A 2026-07-28 spec-readiness pass. Against a server's first conformant
   remote, akashi now runs a handful of extra read-only, keyless calls (a
